@@ -79,6 +79,33 @@ export default function StudyApp() {
     say("Oh no! The crew is panicking.");
   }, [say]);
 
+  /* remember hired workers, crew, timer length and generated study sets in this browser */
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (!hydrated.current) return;
+    try {
+      localStorage.setItem("studycafe.v1", JSON.stringify({ unlocked, crew, preset, gen }));
+    } catch {}
+  }, [unlocked, crew, preset, gen]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("studycafe.v1");
+      if (raw) {
+        const d = JSON.parse(raw);
+        const u = typeof d.unlocked === "number" ? Math.max(5, Math.min(A.length, d.unlocked)) : 5;
+        setUnlocked(u);
+        if (Array.isArray(d.crew) && d.crew.length === 3 && d.crew.every((x: unknown) => x === null || (typeof x === "number" && x >= 0 && x < u))) setCrew(d.crew);
+        if (d.preset === "p25" || d.preset === "p50") {
+          setPreset(d.preset);
+          setTotal(PRESETS[d.preset as Preset][0]);
+          setLeft(PRESETS[d.preset as Preset][0]);
+        }
+        if (d.gen && typeof d.gen === "object") setGen(d.gen);
+      }
+    } catch {}
+    hydrated.current = true;
+  }, []);
+
   const locked = mode === "focus";
   const crewCount = crew.filter((x) => x !== null).length;
 
@@ -263,31 +290,53 @@ export default function StudyApp() {
   const secCount = pf ? pf.sections.length : 1;
   const sec = pf ? pf.sections[Math.min(si, pf.sections.length - 1)] : undefined;
   const hasMoreSections = !!pf && si < secCount - 1;
-  const key = course && sec ? course.id + "-" + Math.min(si, secCount - 1) : "";
+  const secKey = (c: FileItem, i: number) => c.name + "|" + c.size + "|" + i;
+  const key = course && sec ? secKey(course, Math.min(si, secCount - 1)) : "";
   const ready = pf ? gen[key] : undefined;
   const cards = ready?.cards ?? SAMPLE_CARDS;
   const quizQs = ready?.quiz ?? SAMPLE_QUIZ;
   const summary = ready?.summary ?? SAMPLE_SUMMARY;
   const waiting = !!pf && !ready;
 
-  /* ask the AI to write this section's study set the first time we need it */
-  useEffect(() => {
-    if (welcome || !key || !sec || !pf || !course || gen[key] || genErr[key] || inflight.current.has(key)) return;
-    inflight.current.add(key);
-    const k = key;
+  /* ask the AI to write this section's study set, then quietly prepare the next one */
+  const startGen = useCallback((k: string, title: string, unit: string, sc: { start: number; end: number; text: string }) => {
+    if (inflight.current.has(k)) return;
+    inflight.current.add(k);
     fetch("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: course.name, unit: pf.unit, start: sec.start, end: sec.end, text: sec.text }),
+      body: JSON.stringify({ title, unit, start: sc.start, end: sc.end, text: sc.text }),
     })
       .then(async (r) => {
         const j = await r.json();
         if (!r.ok) throw new Error(j.error || "Something went wrong.");
+        inflight.current.delete(k);
         setGen((g) => ({ ...g, [k]: j }));
       })
-      .catch((e) => setGenErr((g) => ({ ...g, [k]: e.message })))
-      .finally(() => inflight.current.delete(k));
-  }, [welcome, key, sec, pf, course, gen, genErr]);
+      .catch((e) => {
+        inflight.current.delete(k);
+        setGenErr((g) => ({ ...g, [k]: e.message }));
+      });
+  }, []);
+
+  useEffect(() => {
+    if (welcome || !course || !pf || !sec) return;
+    if (!gen[key]) {
+      if (!genErr[key]) startGen(key, course.name, pf.unit, sec);
+      return;
+    }
+    if (inflight.current.size > 0) return; // one request at a time keeps us under the free-plan limit
+    let nk = "", nt = "", nu = "", ns: { start: number; end: number; text: string } | undefined;
+    if (hasMoreSections) {
+      nk = secKey(course, si + 1); nt = course.name; nu = pf.unit; ns = pf.sections[si + 1];
+    } else if (qi < queue.length - 1) {
+      const nc = queue[qi + 1];
+      const npf = parsed[nc.id];
+      if (npf) { nk = secKey(nc, 0); nt = nc.name; nu = npf.unit; ns = npf.sections[0]; }
+    }
+    if (ns && nk && !gen[nk] && !genErr[nk]) startGen(nk, nt, nu, ns);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [welcome, key, sec, pf, course, gen, genErr, parsed, queue, qi, si, hasMoreSections, startGen]);
   const retryGen = () => setGenErr((g) => { const n = { ...g }; delete n[key]; return n; });
   const nextName = hasMoreSections ? "section " + (si + 2) : qi < queue.length - 1 ? queue[qi + 1].name : null;
 
@@ -528,7 +577,7 @@ export default function StudyApp() {
             </div>
             <input id="fileIn" type="file" accept=".pdf,.pptx" multiple hidden onChange={(e) => { addFiles(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
           </div>
-          <p className="src" style={{ marginTop: 12 }}>Files are read in your browser and split into sections on your device.</p>
+          <p className="src" style={{ marginTop: 12 }}>Your files are read and split into sections in your browser. Only the text of the section you are studying is sent to the AI to write your questions. Nothing is stored on a server.</p>
         </div>
         <div style={{ minWidth: 0 }}>
           <div className="eyebrow">{files.length ? "Study order · " + selected.length + " of " + files.length + " selected" : "Your study plan"}</div>
