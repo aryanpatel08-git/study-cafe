@@ -41,6 +41,8 @@ export default function StudyApp() {
   const [gen, setGen] = useState<Record<string, Generated>>({});
   const [genErr, setGenErr] = useState<Record<string, string>>({});
   const inflight = useRef<Set<string>>(new Set());
+  const [apiKey, setApiKey] = useState("");
+  const [keyDraft, setKeyDraft] = useState("");
   const uid = useRef(0);
   const [dragOver, setDragOver] = useState(false);
 
@@ -102,6 +104,10 @@ export default function StudyApp() {
         }
         if (d.gen && typeof d.gen === "object") setGen(d.gen);
       }
+    } catch {}
+    try {
+      const k = localStorage.getItem("studycafe.groqkey");
+      if (k) setApiKey(k);
     } catch {}
     hydrated.current = true;
   }, []);
@@ -165,6 +171,21 @@ export default function StudyApp() {
     } else if (mode === "focus") setRunning((r) => !r);
   };
 
+  /* ----- the visitor's own Groq key (kept only in this browser) ----- */
+  const saveKey = () => {
+    const k = keyDraft.trim();
+    if (!k.startsWith("gsk_") || k.length < 20) { say("That does not look like a Groq key. It starts with gsk_."); return; }
+    try { localStorage.setItem("studycafe.groqkey", k); } catch {}
+    setApiKey(k);
+    setKeyDraft("");
+    setGenErr({});
+    say("Key saved in this browser.");
+  };
+  const removeKey = () => {
+    try { localStorage.removeItem("studycafe.groqkey"); } catch {}
+    setApiKey("");
+  };
+
   /* ----- files ----- */
   const addFiles = (list: { name: string; size: number }[]) => {
     let bad = 0;
@@ -185,8 +206,9 @@ export default function StudyApp() {
       return n;
     });
   const selected = files.filter((f) => f.on);
+  const needsKey = selected.some((f) => f.file) && !apiKey;
   const openCafe = async () => {
-    if (!selected.length || parsing) return;
+    if (!selected.length || parsing || needsKey) return;
     setParsing(true);
     const out: Record<number, ParsedFile> = {};
     for (const f of selected) {
@@ -304,7 +326,7 @@ export default function StudyApp() {
     inflight.current.add(k);
     fetch("/api/generate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-groq-key": apiKey },
       body: JSON.stringify({ title, unit, start: sc.start, end: sc.end, text: sc.text }),
     })
       .then(async (r) => {
@@ -317,10 +339,10 @@ export default function StudyApp() {
         inflight.current.delete(k);
         setGenErr((g) => ({ ...g, [k]: e.message }));
       });
-  }, []);
+  }, [apiKey]);
 
   useEffect(() => {
-    if (welcome || !course || !pf || !sec) return;
+    if (welcome || !course || !pf || !sec || !apiKey) return;
     if (!gen[key]) {
       if (!genErr[key]) startGen(key, course.name, pf.unit, sec);
       return;
@@ -397,11 +419,20 @@ export default function StudyApp() {
   /* ----- stage bodies ----- */
   let stage: React.ReactNode;
   if (waiting) {
-    stage = genErr[key] ? (
+    stage = !apiKey ? (
+      <>
+        <h3>One thing first</h3>
+        <div className="msg review">Add your free Groq key so the crew can write your study set.</div>
+        <div className="row"><button className="btn primary" onClick={() => setWelcome(true)}>Add my key</button></div>
+      </>
+    ) : genErr[key] ? (
       <>
         <h3>The crew hit a snag</h3>
         <div className="msg review">{genErr[key]}</div>
-        <div className="row"><button className="btn primary" onClick={retryGen}>Try again</button></div>
+        <div className="row">
+          <button className="btn primary" onClick={retryGen}>Try again</button>
+          <button className="btn" onClick={() => setWelcome(true)}>Change key</button>
+        </div>
       </>
     ) : (
       <>
@@ -578,6 +609,38 @@ export default function StudyApp() {
             <input id="fileIn" type="file" accept=".pdf,.pptx" multiple hidden onChange={(e) => { addFiles(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
           </div>
           <p className="src" style={{ marginTop: 12 }}>Your files are read and split into sections in your browser. Only the text of the section you are studying is sent to the AI to write your questions. Nothing is stored on a server.</p>
+          <div style={{ marginTop: 14, padding: 14, borderRadius: 18, background: "rgba(255,255,255,.55)" }}>
+            <div className="eyebrow">Your free Groq key</div>
+            {apiKey ? (
+              <div className="row" style={{ marginTop: 8, alignItems: "center" }}>
+                <span className="tag">Key saved</span>
+                <button className="btn ib" onClick={removeKey}>Remove</button>
+              </div>
+            ) : (
+              <>
+                <p className="src" style={{ margin: "6px 0 10px" }}>
+                  The AI that writes your flashcards and quizzes runs on your own free Groq account, so it never runs out because of other people.{" "}
+                  <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer">Get a free key</a> (about a minute), then paste it here. The sample course works without one.
+                </p>
+                <div className="row" style={{ marginTop: 0 }}>
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    placeholder="gsk_..."
+                    aria-label="Groq API key"
+                    value={keyDraft}
+                    onChange={(e) => setKeyDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") saveKey(); }}
+                    style={{ flex: 1, minWidth: 160, minHeight: 40, padding: "0 14px", border: "2px solid var(--line)", borderRadius: 999, font: "400 14px var(--body)", background: "rgba(255,255,255,.85)", color: "var(--ink)" }}
+                  />
+                  <button className="btn primary" onClick={saveKey}>Save key</button>
+                </div>
+              </>
+            )}
+            <p className="src" style={{ marginTop: 8 }}>
+              The key stays in this browser. It is sent over HTTPS only to pass your request on to Groq, and this site never stores or logs it.
+            </p>
+          </div>
         </div>
         <div style={{ minWidth: 0 }}>
           <div className="eyebrow">{files.length ? "Study order · " + selected.length + " of " + files.length + " selected" : "Your study plan"}</div>
@@ -595,8 +658,8 @@ export default function StudyApp() {
             ))}
           </ol>
           <div className="row">
-            <button className="btn primary" disabled={!selected.length || parsing} onClick={openCafe}>
-              {parsing ? "Reading your files..." : selected.length ? "Open the cafe with " + selected.length + " file" + (selected.length > 1 ? "s" : "") : "Pick at least one file"}
+            <button className="btn primary" disabled={!selected.length || parsing || needsKey} onClick={openCafe}>
+              {parsing ? "Reading your files..." : needsKey ? "Add your Groq key to continue" : selected.length ? "Open the cafe with " + selected.length + " file" + (selected.length > 1 ? "s" : "") : "Pick at least one file"}
             </button>
           </div>
         </div>

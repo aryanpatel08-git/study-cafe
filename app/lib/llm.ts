@@ -9,9 +9,10 @@ export class LlmError extends Error {
   }
 }
 
-export async function chatJson(system: string, user: string, maxTokens = 4500): Promise<unknown> {
-  const key = process.env.GROQ_API_KEY;
-  if (!key) throw new LlmError("The AI key is missing. Add GROQ_API_KEY to .env.local and restart.", 500);
+export async function chatJson(system: string, user: string, maxTokens = 4500, userKey?: string): Promise<unknown> {
+  // On the live site every visitor brings their own key. The server key is only a convenience for local development.
+  const key = userKey || (process.env.NODE_ENV !== "production" ? process.env.GROQ_API_KEY : undefined);
+  if (!key) throw new LlmError("Add your free Groq key to continue.", 401);
   const res = await fetch(URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
@@ -26,6 +27,7 @@ export async function chatJson(system: string, user: string, maxTokens = 4500): 
       ],
     }),
   });
+  if (res.status === 401) throw new LlmError("Groq rejected that key. Check it and try again.", 401);
   if (res.status === 429) {
     const detail = (await res.text()).slice(0, 300);
     console.error("Groq rate limit", detail);

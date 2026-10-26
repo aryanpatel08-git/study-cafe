@@ -53,6 +53,10 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Bad request." }, { status: 400 });
   }
+  const userKey = (req.headers.get("x-groq-key") || "").trim();
+  if (userKey && (!userKey.startsWith("gsk_") || userKey.length > 200)) {
+    return NextResponse.json({ error: "That does not look like a Groq key." }, { status: 401 });
+  }
   const text = str(body.text).slice(0, 12000);
   if (text.length < 100) return NextResponse.json({ error: "Not enough text in this section." }, { status: 400 });
   const start = Math.round(Number(body.start)) || 1;
@@ -87,7 +91,7 @@ ${text}`;
     let last: unknown;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const raw = await chatJson(system, user, 4500);
+        const raw = await chatJson(system, user, 4500, userKey);
         return NextResponse.json(clean(raw, start, end));
       } catch (e) {
         last = e;
