@@ -5,6 +5,7 @@ import CafeCanvas, { CafeMode } from "./CafeCanvas";
 import { A, portrait } from "../lib/workers";
 import { SAMPLE_CARDS, SAMPLE_QUIZ, SAMPLE_SUMMARY, Generated } from "../lib/content";
 import { parseFile, ParsedFile } from "../lib/parseFile";
+import "../sign.css";
 
 type FileItem = { id: number; name: string; size: number; type: string; on: boolean; file?: File };
 type QuizResult = { pct: number; right: number; pass: boolean; hired: string | null; pages: string };
@@ -121,7 +122,8 @@ export default function StudyApp() {
     b.toggle("welcome", welcome);
     b.toggle("focus", mode === "focus");
     b.toggle("break", mode === "break");
-  }, [welcome, mode]);
+    b.toggle("paused", mode === "focus" && !running); /* paused: the panel slides away so you can see the cafe */
+  }, [welcome, mode, running]);
 
   /* ----- the clock: one tick per second, re-armed after every change ----- */
   const startBreak = useCallback(() => {
@@ -576,10 +578,19 @@ export default function StudyApp() {
         <CafeCanvas crew={crew} mode={mode} running={running} panicUntil={panicUntil} />
       </div>
 
-      <header className="top">
-        <div className="brand">Study Cafe</div>
-        <span className={"tag" + (mode === "break" ? " closed" : "")}>{mode === "break" ? "Closed" : "Open"}</span>
-      </header>
+      <header className="top" />
+
+      {/* Hanging shop sign: OPEN while you study, flips to CLOSED during the break */}
+      <div className={"shop-sign" + (mode === "break" ? " closed" : "")} role="img" aria-label={mode === "break" ? "Sign: closed, lunch break" : "Sign: open"}>
+        <div className="sign-sway">
+          <span className="chain l" />
+          <span className="chain r" />
+          <div className="board">
+            <div className="face front"><b>OPEN</b><small>come on in</small></div>
+            <div className="face back"><b>CLOSED</b><small>napping, back soon</small></div>
+          </div>
+        </div>
+      </div>
 
       {/* Welcome: import, choose, order */}
       <section className="panel" id="welcome" aria-label="Choose what to study">
@@ -720,6 +731,13 @@ export default function StudyApp() {
         </section>
         <div id="crewSlot">{mode !== "break" && crewPicker}</div>
       </main>
+
+      {/* Shown only while paused: the study panel is hidden, so this is how you come back */}
+      <div className="pausebar" role="status">
+        <span className="pz">Paused</span>
+        <span className="pt">{fmt(left)}</span>
+        <button className="btn primary" onClick={toggleTimer}>Resume</button>
+      </div>
 
       <section className="dock" aria-label="Lunch break">
         <div className="dockhead">

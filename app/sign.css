@@ -1,0 +1,101 @@
+/* A hanging shop sign in the top-left corner: OPEN while you study, flips to CLOSED on break. */
+.shop-sign{
+  position:fixed;top:0;left:max(18px,env(safe-area-inset-left,0px));z-index:6;
+  width:132px;height:72px;pointer-events:none;
+  transform-origin:top left;
+  perspective:700px;
+}
+.sign-sway{
+  position:relative;width:100%;height:100%;
+  transform-origin:50% 0;
+  animation:sign-sway 6s ease-in-out infinite;
+}
+@keyframes sign-sway{0%,100%{transform:rotate(-1.8deg)}50%{transform:rotate(1.8deg)}}
+
+/* the two pieces of twine it hangs from */
+.chain{
+  position:absolute;top:0;width:4px;height:16px;border-radius:2px;
+  background:repeating-linear-gradient(60deg,#e2cfae 0 3px,#a98e68 3px 5px);
+  box-shadow:0 1px 2px rgba(60,30,10,.3);
+}
+.chain.l{left:24px}
+.chain.r{right:24px}
+
+.board{
+  position:absolute;left:0;right:0;top:14px;height:56px;
+  transform-style:preserve-3d;
+  transition:transform .9s cubic-bezier(.3,1.5,.5,1);
+}
+.shop-sign.closed .board{transform:rotateY(180deg)}
+
+/* a plank of wood: grain lines, a knot, a routed edge */
+.face{
+  position:absolute;inset:0;border-radius:12px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  outline:1.5px solid rgba(50,24,8,.38);outline-offset:-6px;
+  box-shadow:0 7px 16px rgba(60,30,10,.34),inset 0 2px 0 rgba(255,236,200,.45),inset 0 -3px 0 rgba(50,24,8,.25);
+}
+/* two nail heads */
+.face:before,.face:after{
+  content:"";position:absolute;top:7px;width:5px;height:5px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#f3e8d8,#7c6b58);
+  box-shadow:0 1px 1px rgba(40,20,5,.5);
+}
+.face:before{left:9px}
+.face:after{right:9px}
+.face b{
+  font:800 28px/1 var(--head,'Fredoka',system-ui,sans-serif);
+  letter-spacing:.05em;
+}
+.face small{
+  font:700 9px/1 var(--body,'Nunito',system-ui,sans-serif);
+  letter-spacing:.1em;text-transform:uppercase;
+}
+
+.face.front{
+  border:3px solid #7b5232;
+  background:
+    radial-gradient(ellipse 9px 6px at 92% 78%,rgba(70,36,14,.55) 0 45%,rgba(70,36,14,0) 100%),
+    repeating-linear-gradient(2deg,rgba(80,40,14,.13) 0 1px,rgba(80,40,14,0) 1px 6px),
+    repeating-linear-gradient(-1deg,rgba(255,226,170,.16) 0 2px,rgba(255,226,170,0) 2px 9px),
+    linear-gradient(#d4a46c,#b9834c);
+}
+.face.front b{color:#fff3d6;text-shadow:0 1px 0 rgba(70,36,14,.65),0 2px 3px rgba(70,36,14,.35),0 0 12px rgba(255,226,150,.45)}
+.face.front small{color:#fbe7c4;text-shadow:0 1px 0 rgba(70,36,14,.55)}
+
+.face.back{
+  transform:rotateY(180deg);
+  border:3px solid #4e301b;
+  background:
+    radial-gradient(ellipse 8px 6px at 7% 76%,rgba(30,14,4,.55) 0 45%,rgba(30,14,4,0) 100%),
+    repeating-linear-gradient(-2deg,rgba(30,14,4,.16) 0 1px,rgba(30,14,4,0) 1px 6px),
+    repeating-linear-gradient(1deg,rgba(255,200,140,.10) 0 2px,rgba(255,200,140,0) 2px 9px),
+    linear-gradient(#93603d,#744729);
+}
+.face.back b{font-size:23px;color:#f9dfb0;text-shadow:0 1px 0 rgba(30,14,4,.7),0 2px 3px rgba(30,14,4,.4)}
+.face.back small{color:#eccfa0;font-size:8px;text-shadow:0 1px 0 rgba(30,14,4,.6)}
+
+@media (max-width:640px){
+  .shop-sign{transform:scale(.78)}
+}
+@media (prefers-reduced-motion:reduce){
+  .sign-sway{animation:none}
+  .board{transition:none}
+}
+
+/* ---- Paused: the study panel fades away so you can watch the cafe; a small bar brings you back ---- */
+body.paused{overflow:hidden}
+body.paused .panel{opacity:0;transform:translateY(14px) scale(.985);visibility:hidden;pointer-events:none;transition:opacity .6s,transform .6s,visibility 0s .6s}
+.pausebar{
+  position:fixed;z-index:4;left:50%;bottom:max(22px,env(safe-area-inset-bottom,0px));
+  display:flex;align-items:center;gap:14px;padding:10px 12px 10px 22px;border-radius:999px;
+  background:rgba(255,250,243,.88);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  box-shadow:0 12px 34px rgba(80,40,10,.3);
+  transform:translate(-50%,24px);opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .5s,transform .5s,visibility 0s .5s;
+}
+body.paused .pausebar{opacity:1;visibility:visible;pointer-events:auto;transform:translate(-50%,0);transition:opacity .5s .3s,transform .5s .3s,visibility 0s}
+.pausebar .pz{font:600 14px/1 var(--head,'Fredoka',system-ui,sans-serif);color:var(--ink-soft,#6b5a50);letter-spacing:.06em;text-transform:uppercase}
+.pausebar .pt{font:600 28px/1 var(--head,'Fredoka',system-ui,sans-serif);font-variant-numeric:tabular-nums;color:var(--ink,#3b2d27)}
+@media (prefers-reduced-motion:reduce){.pausebar,body.paused .panel{transition:none}}
