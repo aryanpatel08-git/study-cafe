@@ -39,9 +39,9 @@ export default function CafeCanvas({ crew, mode, running, panicUntil }: Props) {
 
     // z = how asleep the worker is (0 awake, 1 curled up on a cushion)
     const walkers = [
-      { d: 0, ph: 0, m: 1, dir: 1, z: 0 },
-      { d: 120, ph: 2, m: 1, dir: 1, z: 0 },
-      { d: 300, ph: 4, m: 1, dir: 1, z: 0 },
+      { d: 0, ph: 0, m: 1, dir: 1, z: 0, view: "side" as "side" | "front" | "back" },
+      { d: 120, ph: 2, m: 1, dir: 1, z: 0, view: "side" as "side" | "front" | "back" },
+      { d: 300, ph: 4, m: 1, dir: 1, z: 0, view: "side" as "side" | "front" | "back" },
     ];
     const BED_COLORS = ["#c9683f", "#8fae8b", "#e8b44f"];
     const dust = Array.from({ length: 16 }, () => ({
@@ -87,6 +87,12 @@ export default function CafeCanvas({ crew, mode, running, panicUntil }: Props) {
         const p2 = posOn(PATHS[slot], wk.d + 2);
         const dx = p2[0] - p1[0];
         if (Math.abs(dx) > 0.3) wk.dir = dx > 0 ? 1 : -1;
+        // Walking toward the screen: show the face. Walking away: show the back. Sideways: the usual 3/4 look.
+        const dy = p2[1] - p1[1];
+        if (moving) {
+          if (Math.abs(dy) > 0.2 && Math.abs(dy) > Math.abs(dx) * 0.6) wk.view = dy > 0 ? "front" : "back";
+          else wk.view = "side";
+        }
         if (e > 0.3) wk.dir = 1;
         const shake = pan ? Math.sin(now / 45 + slot * 2) * 2.5 : 0;
         const bed = BEDS[slot];
@@ -113,7 +119,7 @@ export default function CafeCanvas({ crew, mode, running, panicUntil }: Props) {
             ctx.save();
             ctx.translate(x, y);
             ctx.scale(wk.dir * s, s);
-            drawWorker(ctx, A[w], wk.ph, moving && e < 0.92, pan, blink, false, e);
+            drawWorker(ctx, A[w], wk.ph, moving && e < 0.92, pan, blink, false, e, wk.view);
             ctx.restore();
             if (e > 0.85) {
               // floating Zzz above the sleeping head
